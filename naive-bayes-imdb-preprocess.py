@@ -6,9 +6,14 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Iterable, Optional
 import numpy as np
-
-
-DATA_DIR: str = os.environ.get("IMDB_DATA_DIR", "./data")  # keep configurable
+"""""
+- **os**: Used for operating-system-level file and directory operations such as joining paths (os.path.join) and checking directory existence (os.path.isdir). This ensures the code works on Windows, macOS, and Linux without hard-coded separators.
+- **re**: The built-in regular expression module for tokenizing text. It identifies word-like patterns and splits text accordingly (e.g., re.findall(TOKEN_PATTERN, text) finds all alphanumeric word tokens).
+- **json**: Used to serialize (json.dump) and deserialize (json.load) the vocabulary dictionary to and from disk in a human-readable format.
+- **collections.Counter**: A dictionary subclass used for counting word frequencies efficiently when building the vocabulary.
+- **dataclasses.dataclass**: Provides a lightweight way to define data structures (e.g., EncodedDataset) with automatic initialization and representation methods.
+"""
+DATA_DIR: str = os.environ.get("IMDB_DATA_DIR", "./data")
 ACL_DIR: str = os.path.join(DATA_DIR, "aclImdb")
 # Laplace smoothing parameter
 ALPHA = 1.0
@@ -27,7 +32,7 @@ UNK_TOKEN = "<UNK>"
 
 
 # Regex for very simple tokenization: split on non-alphanumeric (keeps numbers, strips punctuation)
-# We deliberately avoid heavy NLP libs to satisfy constraints. This is a common, reproducible baseline.
+
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
 @dataclass
 class EncodedDataset:
@@ -46,8 +51,6 @@ class EncodedDataset:
 
 
 - Lowercasing merges variants like "Good" and "good".
-- The regex extracts alphanumeric runs and simple apostrophe forms (e.g., don't -> don't).
-- This stays within standard lib and is transparent/reproducible.
   """
 def simple_tokenize(text: str) -> List[str]:
 
@@ -61,7 +64,7 @@ def load_split(split_dir: str) -> List[Tuple[str, int]]:
       split_dir/pos/*.txt, split_dir/neg/*.txt
 
     Returns a list of (text, label) where label ∈ {a_POS, a_NEG}.
-    Also prints per-class counts for quick sanity checks.
+    Also prints per-class counts for debugging purposes
     """
     import glob
 
@@ -70,7 +73,7 @@ def load_split(split_dir: str) -> List[Tuple[str, int]]:
         d = os.path.join(split_dir, label_name)
         if not os.path.isdir(d):
             raise FileNotFoundError(f"Expected directory not found: {d}")
-        # Use glob to avoid surprises with hidden files and ensure only .txt files are read.
+        # Used glob to ensure only .txt files are read and avoid a previous issue with reading the whole training/test set.
         files = sorted(glob.glob(os.path.join(d, "*.txt")))
         for fpath in files:
             with open(fpath, "r", encoding="utf-8") as f:
@@ -98,7 +101,7 @@ def build_vocab(tokenized_docs: Iterable[List[str]], min_freq: int = MIN_FREQ) -
     return vocab
 def encode(tokens: List[str], vocab: Dict[str, int]) -> List[int]:
     """Map tokens -> ids using the vocabulary; unknowns -> <UNK>.
-    This is the Multinomial NB bag-of-words baseline, but we keep sequence form for flexibility.
+    This is the Multinomial NB bag-of-words baseline, but I kept sequence form for flexibility in case of low accuracy requiring additional changes.
     """
     unk_id = vocab[UNK_TOKEN]
     return [vocab.get(t, unk_id) for t in tokens]
@@ -108,7 +111,7 @@ def pad_truncate(ids: List[int], max_len: int, pad_id: int = 0) -> List[int]:
     """
     if len(ids) >= max_len:
         return ids[:max_len]
-    return ids + [pad_id] * (max_len - len(ids))
+    return ids + [pad_id] * (max_len - len(ids)) #this may need debugging but on pen and paper looks fine
 def as_numpy(seqs: List[List[int]], max_len: Optional[int]) -> np.ndarray:
     """Convert a list of variable-length sequences to a numpy array.
     - If max_len is None -> returns an object array of Python lists (still fine for NB counts).
@@ -196,7 +199,7 @@ def main() -> None:
     X_test, y_test, _, _ = preprocess("test", vocab=vocab)
     print(f"Test:  X shape={X_test.shape}, y shape={y_test.shape}")
 
-    # Export (optional and lightweight)
+    # Export (optional)
     out_dir = os.path.join(ACL_DIR, "preprocessed_baseline")
     os.makedirs(out_dir, exist_ok=True)
 
